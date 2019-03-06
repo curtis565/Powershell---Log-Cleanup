@@ -1,0 +1,54 @@
+###################
+#####Variables#####
+###################
+#Filepaths to recursively run against
+$FilePath1 = "C:\inetpub\logs\LogFiles"
+#Types of files to delete
+$FileType = "*.log"
+#Number of days to keep (since creation of file)
+$DaysToKeep = "-90"
+#Send notifications emails to
+$SmtpTo = "admin@contoso.com"
+#Specify mail server to send to
+$SmtpServer = "mail.contoso.com"
+#Enables or disabled email notifications
+$EnableEmailNotification = $false
+#Enables or disabled event viewer logging when running script
+$EnableEventViewerNotification = $true
+
+#Setting this because it's annoying and I always forget to do it on a fresh server build.
+Set-ExecutionPolicy RemoteSigned
+
+$event = new-object System.Diagnostics.EventLog("Application");
+$event.MachineName = ".";
+$event.Source = "[POWERSHELL] Logs-Cleanup";
+
+$evt = "*** LOG CLEAN-UP *** " + [environment]::NewLine;
+$stdout = "*** LOG CLEAN-UP ***" + [environment]::NewLine + [environment]::NewLine;
+
+$children = get-childitem $FilePath1 -Include $FileType -recurse | ?{$_.creationtime -lt ((get-date).adddays($DaysToKeep))};
+
+foreach ($child in $children)
+    {
+    $stdout += $child.fullname + [environment]::NewLine;
+    }
+
+$children | ?{$_.creationtime -lt ((get-date).adddays($DaysToKeep))} | remove-item -force
+
+If ($EnableEmailNotification -eq $true)
+    {
+    Send-MailMessage -SmtpServer $SmtpServer -from ("powershell@" + $env:computername + ".ahfc.us") -to $SmtpTo -subject "[POWERSHELL] Logs-Cleanup" -body $stdout;
+    }
+Else 
+    {
+    Write-Host "Email Notifications Disabled"
+    }
+
+If ($EnableEventViewerNotification -eq $true)
+    {
+    $event.WriteEntry($evt, [System.Diagnostics.EventLogEntryType]::Information, 0);
+    }
+Else
+    {
+    Write-Host "Event Viewer Logging Disabled"
+    }
